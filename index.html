@@ -1,3 +1,164 @@
 <html>
-<body><h1>aahhh</h1></body>
+    <head>
+        <script type="text/javascript" src="full_collections.json"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/dark.css">
+        <style type="text/css">
+            tbody tr:nth-child(odd) {
+                background-color: #202b38;
+                background-color: var(--background-body);
+            }
+            a[href^='mailto\:']::before {
+                content: '' !important;
+            }
+        </style>
+        <script id="template-collection-header" type="text/template">
+            <details>
+                <summary>{{collection_name}} <span style="float:right">{{complete}}%</span></summary>
+                <table>
+                    <tbody>
+        </script>
+        <script id="template-collection-footer" type="text/template">
+                    </tbody>
+                </table>
+            </details>
+        </script>
+        <script id="template-collection-row" type="text/template">
+            <tr>
+                <td>
+                    <a href="https://boxd.it/{{letterboxd_id}}">
+                        <img src="https://image.tmdb.org/t/p/w92/{{movie_image}}" onerror="this.style.display='none'">
+                    </a>
+                </td>
+                <td>
+                    <a href="https://boxd.it/{{letterboxd_id}}">{{movie_name}}</a>
+                </td>
+            </tr>
+        </script>
+    </head>
+    <body>
+        <h1><img src="img/logo.png" style="width:5%;margin-right:1em">Letterboxd Completionist</h1>
+        <blockquote>
+            We live in a cynical world. A cynical world. And we work in a business of tough competitors. I love you. You... complete me.
+            <footer>
+                <cite>Jerry Maguire, 1996</cite>
+            </footer>
+        </blockquote>
+        <h2>What is this thing?</h2>
+        <p>
+            Letterboxd Pro members may be familiar with the Completed Collections section of their stats page. If you've logged that you've watched, say the entire Lord of the Rings trilogy, it will pop up there. The part that I thought was missing was a feature to tell you which collections you are <em>soooo close</em> to completing. It also turns out to be a handy way to find something new to watch.
+        </p>
+        <h2>How to use</h2>
+        <h3>Step One</h3>
+        <p>
+            You are going to need to go to your <a href="https://letterboxd.com/settings/data/">Account Data</a> page and click the button labeled <strong>Export Your Data</strong>.
+        </p>
+        <h3>Step Two</h3>
+        <p>
+            After your data downloads, find a file in the package named <code>watched.csv</code>. <br>Drag that file on to the <kbd>Choose File</kbd> button below, or navigate to it. Click <kbd>Process</kbd>.
+        </p>
+        <form action="javascript:void(0);" id="the_form">
+          <input type="file" id="the_file" required="required" accept=".csv"/>
+          <input type="submit" value="Process" class="btn"/>
+        </form>
+        <h3>Step Three</h3>
+        <p>
+            It may take a second (there's over 4,000 collections), but after processing, your results will appear below.
+        </p>
+        <div id="results"></div>
+       
+        <br>
+        <br>
+        <br>
+        <hr>
+        <h2>Credits</h2>
+        <p>
+            Project by <strong>Sean Hannan</strong>. <a href="mailto:seanphannan@gmail.com">Email</a> | <a href="https://twitter.com/MrDys">Twitter</a> | <a href="https://letterboxd.com/MrDys/">Letterboxd</a> | <a href="https://github.com/MrDys">GitHub</a>
+        </p>
+        <p>
+            The data used in this project is not live. That would be rude. Collections data last updated: December 9, 2020.
+        </p>
+        <p>
+            Uses elements from <a href="https://letterboxd.com">Letterboxd</a> and <a href="https://www.themoviedb.org">TMDb</a>. Support those fine folks. They are good people.
+        </p>
+        <div id="watched" style="display:none"></div>
+        <script type="text/javascript">
+            function handleFileSelect() {
+                var file = document.getElementById("the_file").files[0];
+                var reader = new FileReader();
+                var watched = [];
+
+                reader.onload = function (file) {
+                    var content = file.target.result;
+                    var rows = file.target.result.split(/[\r\n|\n]+/);
+
+                    for (var i = 1; i < rows.length - 1; i++) {
+                        var arr = rows[i].split(',');
+                        var letterboxd_id = arr[arr.length - 1].slice(16);
+                        watched.push(letterboxd_id);
+                    }
+
+                    document.getElementById('watched').innerHTML = JSON.stringify(watched);
+                };
+
+                reader.onloadend = function () {
+                    var watched = JSON.parse(document.getElementById('watched').innerHTML);
+                    var collections = full_collections;
+
+                    var completion = [];
+
+                    for (var id in collections) {
+                        ids = collections[id].ids;
+                        if (ids === undefined) {
+                            continue;
+                        }
+                        intersection = ids.filter(x => watched.includes(x));
+                        percent = ((intersection.length / ids.length).toFixed(2) * 100) | 0;
+                        if (percent < 40 || percent === 100) {
+                            continue;
+                        }
+                        difference = ids.filter(x => !watched.includes(x));
+                        missing = [];
+                        for (var missing_id in difference) {
+                            info = collections[id].movies[difference[missing_id]];
+                            info.letterboxd_id = difference[missing_id];
+                            missing.push(info);
+                        }
+                        completion[id] = {
+                            complete: percent,
+                            missing: missing,
+                            name: collections[id].name
+                        };
+                    }
+
+                    completion.sort((a, b) => (a.complete > b.complete) ? -1 : 1)
+
+                    var header_html = document.getElementById('template-collection-header').innerHTML;
+                    var footer_html = document.getElementById('template-collection-footer').innerHTML;
+                    var row_html = document.getElementById('template-collection-row').innerHTML;
+
+                    var results_html = '';
+
+                    for (var key in completion) {
+                        results_html += header_html.replace(/{{collection_name}}/g, completion[key]['name'])
+                                                .replace(/{{complete}}/g, completion[key]['complete']);
+                        for (var id in completion[key]['missing']) {
+                            results_html += row_html.replace(/{{movie_name}}/g, completion[key]['missing'][id]['name'])
+                                                    .replace(/{{letterboxd_id}}/g, completion[key]['missing'][id]['letterboxd_id'])
+                                                    .replace(/{{movie_image}}/g, completion[key]['missing'][id]['image']);
+                        }
+                        results_html += footer_html;
+                    }
+
+                    // Replace the HTML of #list with final HTML
+                    document.getElementById("results").innerHTML = results_html;
+
+                    // console.log(completion);
+                }
+
+                reader.readAsText(file);
+            }
+
+            document.getElementById('the_form').addEventListener('submit', handleFileSelect, false);
+          </script>
+    </body>
 </html>
